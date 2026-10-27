@@ -36,7 +36,7 @@ export function loginController({store,vault,connect,disconnect,policy,onConnect
   const expired=()=>hiddenAt!==null&&(now()-hiddenAt>=BACKGROUND_LOCK_MS||now()<hiddenAt);
   function expiryTimer(){clearTimer();timer=later(()=>{timer=null;reset();return init();},Math.max(0,BACKGROUND_LOCK_MS-(now()-hiddenAt)));}
   function valid(epoch){if(epoch!==generation)return false;if(expired()){reset();void init();return false;}return true;}
-  async function init(){const epoch=generation;try{const value=await store.read();if(!valid(epoch))return;saved=value;show(policy.passkeyOwnerSha256?'unlock':value.record?.ownerHash?'enrolled':'create');}catch(e){if(epoch===generation){show('create');onError(e);}}}
+  async function init(){const epoch=generation;try{await vault.ready?.();const value=await store.read();if(!valid(epoch))return;saved=value;show(policy.passkeyOwnerSha256?'unlock':value.record?.ownerHash?'enrolled':'create');}catch(e){if(epoch===generation){show('create');onError(e);}}}
   async function current(epoch,revision){const value=await store.read();if(!valid(epoch))return false;if(value.revision!==revision){reset();saved=value;show(policy.passkeyOwnerSha256?'unlock':'create');return false;}return true;}
   function retry(){clearTimer();if(!memory||!visible())return;timer=later(()=>{timer=null;return resume();},retryDelay);retryDelay=Math.min(30000,retryDelay*2);}
   async function establish(token,revision,epoch){

@@ -15,7 +15,9 @@ function prfBytes(value){
 export function passkeys({credentials,crypto,policy,origin,scope}){
   const rpId=new URL(origin).hostname,random=n=>crypto.getRandomValues(new Uint8Array(n));
   const context=utf8.encode(JSON.stringify({purpose:'Darcy passkey workspace capability v1',origin,scope,enclaveURL:new URL(policy.enclaveURL).origin,configRepo:policy.configRepo}));
-  const salt=()=>crypto.subtle.digest('SHA-256',context).then(v=>new Uint8Array(v));
+  let first;
+  const ready=crypto.subtle.digest('SHA-256',context).then(v=>{first=new Uint8Array(v);});
+  const salt=async()=>{await ready;return first;};
   async function capability(value){
     const bytes=prfBytes(value);let derived;
     try{
@@ -27,8 +29,9 @@ export function passkeys({credentials,crypto,policy,origin,scope}){
   }
   function supported(){if(!credentials?.create||!credentials?.get||!crypto?.subtle)throw unsupported();}
   return{
+    ready:()=>ready,
     async create(signal){
-      supported();const first=await salt();
+      supported();if(!first)throw new Error('Passkey setup is still loading. Try again.');
       const credential=await credentials.create({signal,publicKey:{rp:{id:rpId,name:'Darcy'},user:{id:random(32),name:'Darcy',displayName:'Darcy'},challenge:random(32),pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],authenticatorSelection:{residentKey:'required',userVerification:'required'},attestation:'none',timeout:60000,extensions:{prf:{eval:{first}}}}});
       const extension=credential?.getClientExtensionResults()?.prf;
       if(credential?.type!=='public-key'||(!extension?.enabled&&!extension?.results?.first))throw unsupported();
@@ -36,7 +39,7 @@ export function passkeys({credentials,crypto,policy,origin,scope}){
       const result=await capability(extension.results.first);return{ownerHash:result.ownerHash};
     },
     async unlock(signal){
-      supported();const first=await salt();
+      supported();if(!first)throw new Error('Passkey unlock is still loading. Try again.');
       // Discoverable credentials let synced passkeys work on a fresh device.
       const credential=await credentials.get({signal,publicKey:{rpId,challenge:random(32),userVerification:'required',timeout:60000,extensions:{prf:{eval:{first}}}}});
       if(credential?.type!=='public-key')throw unsupported();
