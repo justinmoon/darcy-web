@@ -29,14 +29,18 @@
           <input id="enclave-url" name="enclaveURL" type="url" autocomplete="off" spellcheck="false" placeholder="https://your-workspace.tinfoil.sh" required>
           <label for="config-repo">Expected configuration repository</label>
           <input id="config-repo" name="configRepo" type="text" autocomplete="off" spellcheck="false" placeholder="owner/workspace-config" required>
-          <label for="owner-token">Workspace access key</label>
-          <input id="owner-token" name="token" type="password" autocomplete="off" spellcheck="false" placeholder="Your private workspace key" required>
-          <p class="field-note">Kept in this tab’s memory. Never placed in a URL or saved by this app.</p>
-          <button id="key-file-button" type="button" class="text-button">Use an access-key file</button>
+          <input id="owner-token" name="token" type="hidden">
+          <p class="field-note">Import your recovery key once on this device to set up a passkey. Only an encrypted copy stays on this device.</p>
+          <button id="key-file-button" type="button" class="primary-button">Import recovery-key file</button>
           <input id="key-file-input" type="file" accept=".key,.txt" hidden>
           <label id="dev-option" class="dev-option" hidden><input id="allow-local-dev" type="checkbox"> Allow unverified localhost development</label>
-          <button id="connect-submit" type="submit" class="primary-button"><span>Connect workspace</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></button>
+          <button id="connect-submit" type="submit" class="primary-button" hidden><span>Continue</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></button>
         </form>
+        <div id="passkey-panel" class="connect-form" hidden>
+          <p id="passkey-note" class="field-note">Loading…</p>
+          <button id="passkey-action" type="button" class="primary-button" disabled>Loading…</button>
+          <button id="recover-button" type="button" class="text-button" hidden>Use recovery key instead</button>
+        </div>
         <p class="setup-footer">The browser checks the workspace’s attestation before sending private content.</p>
       </section>
 
@@ -80,7 +84,7 @@
         <div><button id="phone-pair" class="secondary-button" type="button">Pair phone</button><button id="phone-revoke" class="secondary-button" type="button" hidden>Disconnect phone</button><button id="phone-refresh" class="text-button" type="button">Refresh</button></div>
         <p class="privacy-note">After a workspace restart, open this app to unlock it before using the phone.</p>
       </section>
-      <button id="disconnect-button" class="secondary-button" hidden>Disconnect this tab</button><p id="disconnect-note" class="field-note" hidden>Disconnecting clears this tab’s key. It does not stop the workspace or an active task.</p>
+      <button id="disconnect-button" class="secondary-button" hidden>Lock Darcy</button><p id="disconnect-note" class="field-note" hidden>Locks Darcy in this browser. Your passkey can unlock it again. Running tasks continue.</p>
     </dialog>
     <input id="file-input" type="file" hidden>
   </div>

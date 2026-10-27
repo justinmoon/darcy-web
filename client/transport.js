@@ -58,7 +58,8 @@ async function exchange(active,action,args={}){
   if(!response.ok){
     const error=new Error(value.error||`Workspace request failed (${response.status}).`);
     if(response.status===401||response.status===403){
-      if(session===active){disconnect();emit({event:'error',error:error.message,reconnectRequired:true});}
+      error.authorizationFailed=true;
+      if(session===active){disconnect();emit({event:'error',error:error.message,reconnectRequired:true,authorizationFailed:true});}
       error.reconnectRequired=true;
     }
     throw error;

@@ -8,3 +8,5 @@ button,a,input,textarea{-webkit-tap-highlight-color:transparent}button{cursor:po
 .dev-option{display:flex!important;align-items:center;gap:8px;color:#936e3b;font-size:11px!important;line-height:1.5;margin:0 0 18px!important}.dev-option[hidden]{display:none!important}.connect-form .dev-option input{width:14px;height:14px;margin:0;flex-shrink:0;accent-color:#936e3b}
 
 .phone-panel{border-top:1px solid var(--line);margin-top:20px;padding-top:12px}.phone-panel h3{font-family:Georgia,serif;font-weight:400;font-size:23px}.phone-panel label,.phone-panel #phone-status{font-size:12px}.phone-panel input{width:100%;padding:10px;border:1px solid var(--line);border-radius:6px;background:var(--paper);margin-top:8px}.phone-panel #phone-agent-key{overflow-wrap:anywhere;margin-top:12px}
+.connect-form[hidden]{display:none}
+#recover-button{display:block;margin:16px auto 0}#recover-button[hidden]{display:none}

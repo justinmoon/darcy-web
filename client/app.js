@@ -1,4 +1,6 @@
 import {connect,request,subscribe,disconnect,defaultConnection} from './transport.js';
+import {credentialStore,clearLegacyLogin,loginController} from './login.js';
+import {passkeys} from './passkeys.js';
 
 if(window.top!==window.self){
   document.body.replaceChildren(document.createTextNode('Open Darcy directly in its own tab.'));
@@ -14,18 +16,19 @@ const icons={download:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 
 
 function error(message){$('error-text').textContent=String(message||'Something went wrong. Reconnect before retrying an uncertain task.');$('error-panel').hidden=false;}
 function clearError(){$('error-panel').hidden=true;}
-function clearSession(){
+function clearSession(preserveDraft=false){
+  const draft=preserveDraft?$('message-input').value:'';
   connectionEpoch++;unsubscribe?.();unsubscribe=null;disconnect();
   Object.assign(model,{connected:false,verification:false,development:false,connecting:false,sending:false,transferring:false,snapshot:null,pending:[],viewingHistory:false,config:null});
   loadingHistory=false;filePickerEpoch=null;phoneState=null;phoneBusy=false;messageSignature='';fileSignature='';openTools.clear();
   $('phone-npub').value='';$('phone-agent-key').textContent='';
-  $('message-input').value='';$('owner-token').value='';$('file-input').value='';
+  $('message-input').value=draft;$('owner-token').value='';$('file-input').value='';
   $('older-button').disabled=false;$('latest-button').disabled=false;
   return connectionEpoch;
 }
 function operationError(cause,epoch){
   if(epoch!==connectionEpoch)return;
-  if(cause.reconnectRequired){clearSession();render();}
+  if(cause.reconnectRequired){login.lost(cause);return;}
   error(cause.message||'Task outcome uncertain. Reconnect before retrying.');
 }
 function currentChat(){const s=model.snapshot;return s?.chats?.find(chat=>chat.id===s.current)||s?.chats?.[0]||null;}
@@ -101,7 +104,7 @@ function renderFiles(){
 }
 function render(){
   $('setup-panel').hidden=model.connected;$('conversation-panel').hidden=!model.connected;$('workspace-footer').hidden=!model.connected;
-  $('connect-submit').disabled=model.connecting;$('connect-submit').firstElementChild.textContent=model.connecting?'Verifying workspace…':'Connect workspace';
+  $('connect-submit').disabled=model.connecting;$('connect-submit').firstElementChild.textContent=model.connecting?'Verifying workspace…':'Continue';
   setConnectionBadge();syncComposer();
   $('disconnect-button').hidden=!model.connected;$('disconnect-note').hidden=!model.connected;
   const s=model.snapshot||{};$('workspace-status').textContent=s.status||(model.connected?'Connecting…':'Not connected');$('working-label').textContent=busy()?'Working':'';
@@ -151,7 +154,7 @@ function accept(value,epoch=connectionEpoch){
   if(!value||typeof value!=='object')return;
   if(Array.isArray(value)){if(model.snapshot){model.snapshot.files=value;renderFiles();}return;}
   if(value.event==='error'){
-    if(value.reconnectRequired){clearSession();render();}
+    if(value.reconnectRequired){login.lost(value);return;}
     error(value.error||value.message);return;
   }
   if(value.event==='file_imported'||(!value.event&&typeof value.path==='string')){
@@ -198,24 +201,44 @@ $('key-file-input').addEventListener('change',async()=>{
     const key=(await file.text()).trim();
     if(epoch!==connectionEpoch||model.connected||model.connecting)return;
     if(!/^[a-f0-9]{64}$/.test(key))throw new Error('This is not a Darcy access-key file.');
-    $('owner-token').value=key;clearError();
+    $('owner-token').value=key;clearError();$('connect-form').requestSubmit();
   }catch(e){if(epoch===connectionEpoch)error(e.message);}
 });
 syncDevelopmentOption();
 $('enclave-url').addEventListener('input',syncDevelopmentOption);
+const channel=typeof BroadcastChannel==='function'?new BroadcastChannel('darcy-passkey-lock'):null;
+const vault=passkeys({credentials:navigator.credentials,crypto:window.crypto,policy:defaultConnection,origin:location.origin,scope:new URL('.',location.href).pathname});
+let loginPhase='loading';
+function renderLogin(){
+  const importing=loginPhase==='import';
+  $('connect-form').hidden=!importing;$('passkey-panel').hidden=importing||model.connected;
+  const labels={loading:'Loading…',create:'Create passkey',secure:'Continue',confirm:'Confirm unlock',unlock:'Unlock',working:'Waiting for passkey…',connecting:'Verifying workspace…'};
+  $('passkey-action').textContent=labels[loginPhase]||'Unlock';
+  $('passkey-action').disabled=['loading','working','connecting','connected'].includes(loginPhase);
+  $('passkey-note').textContent=loginPhase==='create'?'Choose where to save your passkey. Keep your recovery-key file as a backup.':loginPhase==='secure'?'Continue with your new passkey to protect this workspace.':loginPhase==='confirm'?'One last unlock to check your passkey works.':loginPhase==='unlock'?'Use your passkey to open your workspace.':'Your key stays encrypted on this device.';
+  $('recover-button').hidden=['loading','working','connecting'].includes(loginPhase);
+}
+const login=loginController({
+  store:credentialStore(window.indexedDB),vault,connect,disconnect,policy:defaultConnection,
+  visible:()=>document.visibilityState!=='hidden',notify:()=>channel?.postMessage('lock'),
+  onConnecting(){const epoch=clearSession(true);unsubscribe=subscribe(value=>accept(value,epoch));model.connecting=true;render();},
+  onConnected(response,options){
+    model.connected=true;model.connecting=false;model.verification=true;model.development=false;
+    model.config={enclaveURL:options.enclaveURL,configRepo:options.configRepo};accept(response.snapshot);render();
+    void navigator.storage?.persist?.().catch(()=>{});
+  },
+  onPhase(value){loginPhase=value;model.connecting=['working','connecting'].includes(value);renderLogin();render();},
+  onDisconnected(){clearSession(true);render();},
+  onError:cause=>error(cause.message||cause.error||'Connection interrupted. Check history before retrying a task.'),
+});
+if(channel)channel.onmessage=event=>{if(event.data==='lock')login.externalLock();};
 $('connect-form').addEventListener('submit',async event=>{
   event.preventDefault();if(model.connecting)return;clearError();let options;
   try{options=validConnection();}catch(e){error(e.message);return;}
-  const epoch=clearSession();unsubscribe=subscribe(value=>accept(value,epoch));
-  model.connecting=true;render();
-  try{
-    const response=await connect(options);if(epoch!==connectionEpoch)return;
-    const verified=response?.verification===true,development=response?.mode==='dev'&&options.allowLocalDev;
-    if(!verified&&!development){disconnect();throw new Error('Workspace verification did not pass. No private conversation is opened.');}
-    model.connected=true;model.verification=verified;model.development=!verified;model.config={enclaveURL:options.enclaveURL,configRepo:options.configRepo};options.token='';
-    if(response?.snapshot)accept(response.snapshot,epoch);else{const snapshot=await request('state',{});if(epoch!==connectionEpoch)return;accept(snapshot,epoch);}
-  }catch(e){if(epoch!==connectionEpoch)return;clearSession();error(e.message);render();}finally{options.token='';if(epoch===connectionEpoch){model.connecting=false;render();if(ready())$('message-input').focus();}}
+  await login.prepare(options);options.token='';
 });
+$('passkey-action').addEventListener('click',()=>{clearError();void login.advance();});
+$('recover-button').addEventListener('click',()=>{clearError();void login.forget();});
 $('message-input').addEventListener('input',()=>{const input=$('message-input');input.style.height='auto';input.style.height=`${Math.min(input.scrollHeight,220)}px`;syncComposer();});
 $('message-input').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();if(!$('send-button').disabled)$('message-form').requestSubmit();}});
 $('message-form').addEventListener('submit',async event=>{
@@ -260,8 +283,11 @@ async function historyPage(older){
 $('older-button').addEventListener('click',()=>historyPage(true));
 $('latest-button').addEventListener('click',()=>historyPage(false));
 for(const id of ['connection-button','details-button'])$(id).addEventListener('click',()=>{$('connection-dialog').showModal();void loadPhone();});
-$('disconnect-button').addEventListener('click',()=>{clearSession();$('connection-dialog').close();clearError();render();});
+$('disconnect-button').addEventListener('click',()=>{clearError();$('message-input').value='';void login.lock();$('connection-dialog').close();});
 $('dismiss-error').addEventListener('click',clearError);
-window.addEventListener('pagehide',()=>{clearSession();render();});
-window.addEventListener('pageshow',render);
+window.addEventListener('pagehide',()=>login.suspend());
+window.addEventListener('pageshow',()=>void login.resume());
+window.addEventListener('online',()=>void login.resume());
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')login.suspend();else void login.resume();});
 render();
+void clearLegacyLogin(window.indexedDB).then(()=>login.init()).catch(cause=>{error(cause.message);loginPhase='import';renderLogin();});
