@@ -10,16 +10,21 @@ trusted: changed HTML could replace both JavaScript and its integrity value.
 GitHub Pages shares the account's origin across project sites; a dedicated domain
 would give the app its own browser origin.
 
-Import the recovery-key file once per browser/home-screen install, then set up a
-passkey in your chosen provider. WebAuthn PRF derives a wrapping key; IndexedDB
-stores only the encrypted workspace key and public passkey metadata. Setup must
-pass a decrypt check. Each unlock still verifies the pinned enclave before
-sending the workspace key. There is no plaintext-storage fallback.
+Create a passkey in your chosen provider, then confirm it. No password,
+recovery-key file, or per-device import exists. WebAuthn PRF and HKDF derive the
+workspace credential directly. Synced discoverable passkeys work on fresh
+browsers without transferring a saved browser record. Each unlock verifies the
+pinned enclave before sending its derived credential.
 
-Brief app switches keep the key in memory; 15 minutes in the background or a
-fresh launch requires passkey unlock. Lock clears in-memory access across current
-Darcy windows sharing this browser storage; it does not stop server tasks.
-Passkey sync does not sync the encrypted browser record. Keep the recovery file:
-new devices, cleared browser data or lost passkeys require setup again. Browser
-code can read the key while unlocked. Native iPhone/provider testing remains a
-separate check from the automated crypto, storage and lifecycle tests.
+Initial provisioning requires the owner to create the passkey, then the operator
+binds its public registration hash into the measured workspace configuration.
+There is no unauthenticated first-claim endpoint. The previous credential is
+retired; passkey enrollment is pending until that human step completes.
+
+Brief app switches retain the credential in memory; 15 minutes in the background
+or a fresh launch requires passkey unlock. Lock clears current windows sharing
+this browser storage and leaves server tasks running. Only public enrollment
+metadata is stored. No plaintext key or wrapped old key persists. Losing the
+passkey may lose the workspace; choose a provider with suitable backup/recovery.
+Browser code can read the derived credential while unlocked. Actual iPhone and
+provider interaction needs a device check beyond the automated tests.
