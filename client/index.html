@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://atc.tinfoil.sh http://localhost:* http://127.0.0.1:* http://[::1]:*; img-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; worker-src 'none';">
+  <title>Darcy — your private workspace</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <a class="wordmark" href="./" aria-label="Darcy home">darcy<span aria-hidden="true">.</span></a>
+      <div class="header-actions">
+        <span id="connection-badge" class="connection-badge"><span class="status-dot"></span><span id="connection-label">Not connected</span></span>
+        <button id="connection-button" class="icon-button" aria-label="Connection settings" title="Connection settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 17h14M9 4v6M15 14v6"/></svg></button>
+      </div>
+    </header>
+
+    <main>
+      <section id="setup-panel" class="setup-panel" aria-labelledby="setup-title">
+        <div class="eyebrow"><span class="mini-mark" aria-hidden="true">✳</span> A PRIVATE WORKSPACE</div>
+        <h1 id="setup-title">A little room<br>to think. And do.</h1>
+        <p class="setup-intro">One conversation. Your files and memory.<br>An agent running in a confidential workspace.</p>
+        <form id="connect-form" class="connect-form">
+          <label for="enclave-url">Workspace address</label>
+          <input id="enclave-url" name="enclaveURL" type="url" autocomplete="off" spellcheck="false" placeholder="https://your-workspace.tinfoil.sh" required>
+          <label for="config-repo">Expected configuration repository</label>
+          <input id="config-repo" name="configRepo" type="text" autocomplete="off" spellcheck="false" placeholder="owner/workspace-config" required>
+          <label for="owner-token">Workspace access key</label>
+          <input id="owner-token" name="token" type="password" autocomplete="off" spellcheck="false" placeholder="Your private workspace key" required>
+          <p class="field-note">Kept in this tab’s memory. Never placed in a URL or saved by this app.</p>
+          <button id="key-file-button" type="button" class="text-button">Use an access-key file</button>
+          <input id="key-file-input" type="file" accept=".key,.txt" hidden>
+          <label id="dev-option" class="dev-option" hidden><input id="allow-local-dev" type="checkbox"> Allow unverified localhost development</label>
+          <button id="connect-submit" type="submit" class="primary-button"><span>Connect workspace</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></button>
+        </form>
+        <p class="setup-footer">The browser checks the workspace’s attestation before sending private content.</p>
+      </section>
+
+      <section id="conversation-panel" class="conversation-panel" aria-label="Conversation" hidden>
+        <div class="conversation-heading"><div><span class="eyebrow">YOUR WORKSPACE</span><h1>One ongoing conversation.</h1></div><span id="working-label" class="working-label" aria-live="polite"></span></div>
+        <div class="history-controls"><button id="older-button" class="text-button" hidden>↑ Earlier messages</button><button id="latest-button" class="text-button" hidden>Return to latest ↓</button></div>
+        <div id="empty-chat" class="empty-chat"><span class="empty-mark" aria-hidden="true">✳</span><h2>What’s on your mind?</h2><p>Ask a question, attach a file, or give Darcy something to work on.</p></div>
+        <div id="messages" class="messages" aria-label="Messages" aria-busy="false"></div>
+      </section>
+    </main>
+
+    <div id="error-panel" class="notice error-notice" role="alert" hidden><span id="error-text"></span><button id="dismiss-error" class="text-button" aria-label="Dismiss error">Dismiss</button></div>
+
+    <footer id="workspace-footer" class="workspace-footer" hidden>
+      <section id="result-panel" class="result-panel" aria-labelledby="results-heading" hidden><div class="results-heading"><span id="results-heading" class="eyebrow">WORKSPACE FILES</span><button id="refresh-files" class="text-button">Refresh</button></div><div id="result-files" class="result-files"></div></section>
+      <form id="message-form" class="composer">
+        <div id="pending-attachments" class="pending-attachments" aria-label="Pending attachments" hidden></div>
+        <label class="visually-hidden" for="message-input">Message Darcy</label>
+        <textarea id="message-input" placeholder="Message Darcy…" rows="1" maxlength="32768" spellcheck="true"></textarea>
+        <div class="composer-actions"><div class="composer-left"><button id="attach-button" type="button" class="icon-button attach-button" aria-label="Attach a file" title="Attach a file, up to 16 MiB"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 13 6-6a3 3 0 0 1 4 4l-8 8a5 5 0 0 1-7-7l8-8m-3 9 6-6"/></svg></button><span id="composer-hint">Files stay in this workspace.</span></div><button id="stop-button" type="button" class="stop-button" hidden><span aria-hidden="true">■</span> Stop</button><button id="send-button" type="submit" class="send-button" aria-label="Send message" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button></div>
+      </form>
+      <div class="footer-line"><span id="workspace-status" role="status">Ready</span><button id="details-button" class="text-button">Connection details</button></div>
+    </footer>
+
+    <dialog id="connection-dialog" aria-labelledby="details-title">
+      <form method="dialog" class="dialog-top"><h2 id="details-title">Your connection</h2><button class="icon-button" aria-label="Close connection details"><span aria-hidden="true">×</span></button></form>
+      <dl class="connection-facts"><div><dt>Agent connection</dt><dd id="fact-verification">Not verified</dd></div><div><dt>Inference</dt><dd id="fact-inference">Not connected</dd></div><div><dt>Execution</dt><dd id="fact-execution">Not connected</dd></div><div><dt>Workspace</dt><dd id="fact-endpoint">—</dd></div><div><dt>Configuration</dt><dd id="fact-config">—</dd></div></dl>
+      <p class="privacy-note">Verification checks the remote endpoint against its published configuration. You still trust the browser and the web code loaded here. Workspace verification alone is not proof of every running program or inference connection.</p>
+      <button id="disconnect-button" class="secondary-button" hidden>Disconnect this tab</button><p id="disconnect-note" class="field-note" hidden>Disconnecting clears this tab’s key. It does not stop the workspace or an active task.</p>
+    </dialog>
+    <input id="file-input" type="file" hidden>
+  </div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "name": "darcy-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {"build": "node build.mjs"},
+  "dependencies": {"tinfoil": "1.3.0"},
+  "devDependencies": {"esbuild": "0.28.2"}
+}
