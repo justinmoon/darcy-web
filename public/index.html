@@ -7,7 +7,7 @@
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://atc.tinfoil.sh https://darcy-web.sear.containers.tinfoil.dev; img-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; worker-src 'none';">
   <title>Darcy — your private workspace</title>
-  <link rel="stylesheet" href="./style.d3fe87b112b8ab171e65c5eb.css" integrity="sha384-yHMneuO6Whq9uwUIBEzrRcBw5N+V2Ug/Vcva+nBp/9TV8fjqiwUcy8N6XaR0zx5R" crossorigin="anonymous">
+  <link rel="stylesheet" href="./style.1ef10ffe5a4348fa368c1a13.css" integrity="sha384-cPiCPSXy+G7jtmlH+5H7shhmjBWwngKHK9YVqqMKooh29cezZC/XqezYhWnW1VUQ" crossorigin="anonymous">
 </head>
 <body>
   <div class="app-shell">
@@ -65,10 +65,20 @@
       <form method="dialog" class="dialog-top"><h2 id="details-title">Your connection</h2><button class="icon-button" aria-label="Close connection details"><span aria-hidden="true">×</span></button></form>
       <dl class="connection-facts"><div><dt>Agent connection</dt><dd id="fact-verification">Not verified</dd></div><div><dt>Inference</dt><dd id="fact-inference">Not connected</dd></div><div><dt>Execution</dt><dd id="fact-execution">Not connected</dd></div><div><dt>Workspace</dt><dd id="fact-endpoint">—</dd></div><div><dt>Configuration</dt><dd id="fact-config">—</dd></div></dl>
       <p class="privacy-note">Verification checks the remote endpoint against its published configuration. You still trust the browser and the web code loaded here. Workspace verification alone is not proof of every running program or inference connection.</p>
+      <section id="phone-panel" class="phone-panel" hidden>
+        <h3>Phone · Marmot</h3>
+        <p class="privacy-note">Use <a href="https://www.whitenoise.chat/download" target="_blank" rel="noopener noreferrer">WhiteNoise</a>. Paste the public npub from your phone profile, then accept Darcy’s invitation there. Send <code>/stop</code> to stop a task.</p>
+        <p id="phone-status" role="status">Loading phone settings…</p>
+        <label for="phone-npub">Phone public key</label>
+        <input id="phone-npub" type="text" placeholder="npub1…" autocomplete="off" spellcheck="false">
+        <p id="phone-agent-key" class="privacy-note"></p>
+        <div><button id="phone-pair" class="secondary-button" type="button">Pair phone</button><button id="phone-revoke" class="secondary-button" type="button" hidden>Disconnect phone</button><button id="phone-refresh" class="text-button" type="button">Refresh</button></div>
+        <p class="privacy-note">After a workspace restart, open this app to unlock it before using the phone.</p>
+      </section>
       <button id="disconnect-button" class="secondary-button" hidden>Disconnect this tab</button><p id="disconnect-note" class="field-note" hidden>Disconnecting clears this tab’s key. It does not stop the workspace or an active task.</p>
     </dialog>
     <input id="file-input" type="file" hidden>
   </div>
-  <script type="module" src="./app.0eda36404c9d85e1eb7f85e5.js" integrity="sha384-NOPF+Zd+9tgIuuidqTEUzGoCCRUX025iHoiXhw58CLGyR/xmxCJ3BE6dZj8wHDK9" crossorigin="anonymous"></script>
+  <script type="module" src="./app.54e582b4e4a6435672a0cec6.js" integrity="sha384-8SZ/8X2m65VqOMNcuEKPNnwRhdrXcdD3HZp77NHH9I0J3O+LTaHjlDFpr4AAYI81" crossorigin="anonymous"></script>
 </body>
 </html>

@@ -8,7 +8,7 @@ if(window.top!==window.self){
 const $=id=>document.getElementById(id);
 const MAX_FILE=16*1024*1024;
 const model={connected:false,verification:false,development:false,connecting:false,sending:false,transferring:false,snapshot:null,pending:[],viewingHistory:false,config:null};
-let messageSignature='', fileSignature='',connectionEpoch=0,loadingHistory=false,unsubscribe=null,filePickerEpoch=null;
+let messageSignature='', fileSignature='',connectionEpoch=0,loadingHistory=false,unsubscribe=null,filePickerEpoch=null,phoneState=null,phoneBusy=false;
 const openTools=new Set();
 const icons={download:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg>'};
 
@@ -17,7 +17,8 @@ function clearError(){$('error-panel').hidden=true;}
 function clearSession(){
   connectionEpoch++;unsubscribe?.();unsubscribe=null;disconnect();
   Object.assign(model,{connected:false,verification:false,development:false,connecting:false,sending:false,transferring:false,snapshot:null,pending:[],viewingHistory:false,config:null});
-  loadingHistory=false;filePickerEpoch=null;messageSignature='';fileSignature='';openTools.clear();
+  loadingHistory=false;filePickerEpoch=null;phoneState=null;phoneBusy=false;messageSignature='';fileSignature='';openTools.clear();
+  $('phone-npub').value='';$('phone-agent-key').textContent='';
   $('message-input').value='';$('owner-token').value='';$('file-input').value='';
   $('older-button').disabled=false;$('latest-button').disabled=false;
   return connectionEpoch;
@@ -100,8 +101,44 @@ function render(){
   $('messages').setAttribute('aria-busy',String(busy()));
   $('fact-inference').textContent=s.inference||'Not connected';$('fact-execution').textContent=s.execution||'Not connected';
   $('fact-endpoint').textContent=model.config?.enclaveURL||'—';$('fact-config').textContent=model.config?.configRepo||'—';
-  renderMessages();renderFiles();renderPending();
+  renderMessages();renderFiles();renderPending();renderPhone();
 }
+function renderPhone(){
+  $('phone-panel').hidden=!model.connected||model.snapshot?.phone?.enabled!==true;
+  const paired=!!phoneState?.phone_npub;
+  $('phone-status').textContent=phoneBusy?'Updating phone settings…':phoneState?.localError||phoneState?.error||(phoneState?.pairing_uncertain?'Invitation unfinished. Disconnect the phone and try again.':paired?'Phone invited. Accept Darcy’s invitation in WhiteNoise.':phoneState?.ready?'No phone paired.':'Phone connection is starting. Refresh in a moment.');
+  $('phone-agent-key').textContent=phoneState?.account_npub?`Darcy identity: ${phoneState.account_npub}`:'';
+  $('phone-pair').hidden=paired;$('phone-revoke').hidden=!paired&&!phoneState?.pairing_uncertain;
+  $('phone-pair').disabled=phoneBusy||!phoneState?.ready;
+  $('phone-revoke').disabled=phoneBusy||!Number.isSafeInteger(phoneState?.revision);
+  $('phone-refresh').disabled=phoneBusy;$('phone-npub').disabled=phoneBusy||paired;
+  if(paired)$('phone-npub').value=phoneState.phone_npub;
+}
+async function loadPhone(){
+  if(!model.connected||!model.snapshot?.phone?.enabled||phoneBusy)return;
+  const epoch=connectionEpoch;phoneBusy=true;renderPhone();
+  try{const state=await request('phone_status');if(epoch!==connectionEpoch)return;phoneState=state;}
+  catch(e){if(epoch!==connectionEpoch)return;if(e.reconnectRequired)operationError(e,epoch);else phoneState={...phoneState,localError:e.message};}
+  finally{if(epoch===connectionEpoch){phoneBusy=false;renderPhone();}}
+}
+async function changePhone(action){
+  if(phoneBusy||!model.connected||!Number.isSafeInteger(phoneState?.revision))return;
+  const epoch=connectionEpoch,args={expected_revision:phoneState.revision};
+  if(action==='phone_pair'){
+    args.npub=$('phone-npub').value.trim();
+    if(!/^npub1[023456789acdefghjklmnpqrstuvwxyz]{58}$/.test(args.npub)){$('phone-npub').value='';phoneState={...phoneState,localError:'Paste the public npub from your phone profile.'};renderPhone();return;}
+  }
+  phoneBusy=true;renderPhone();
+  try{
+    await request(action,args);if(epoch!==connectionEpoch)return;
+    if(action==='phone_revoke')$('phone-npub').value='';
+    const state=await request('phone_status');if(epoch!==connectionEpoch)return;phoneState=state;
+  }catch(e){if(epoch!==connectionEpoch)return;if(e.reconnectRequired)operationError(e,epoch);else phoneState={...phoneState,localError:e.message};}
+  finally{if(epoch===connectionEpoch){phoneBusy=false;renderPhone();}}
+}
+$('phone-refresh').addEventListener('click',loadPhone);
+$('phone-pair').addEventListener('click',()=>changePhone('phone_pair'));
+$('phone-revoke').addEventListener('click',()=>changePhone('phone_revoke'));
 function accept(value,epoch=connectionEpoch){
   if(epoch!==connectionEpoch)return;
   if(!value||typeof value!=='object')return;
@@ -215,7 +252,7 @@ async function historyPage(older){
 }
 $('older-button').addEventListener('click',()=>historyPage(true));
 $('latest-button').addEventListener('click',()=>historyPage(false));
-for(const id of ['connection-button','details-button'])$(id).addEventListener('click',()=>$('connection-dialog').showModal());
+for(const id of ['connection-button','details-button'])$(id).addEventListener('click',()=>{$('connection-dialog').showModal();void loadPhone();});
 $('disconnect-button').addEventListener('click',()=>{clearSession();$('connection-dialog').close();clearError();render();});
 $('dismiss-error').addEventListener('click',clearError);
 window.addEventListener('pagehide',()=>{clearSession();render();});

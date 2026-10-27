@@ -107,7 +107,7 @@ export async function connect(options){
 
 export async function request(action,args={}){
   const active=session;if(!active)throw new Error('Connect to the workspace first.');
-  if(action==='send'||action==='import_file'){
+  if(['send','import_file','phone_pair','phone_revoke'].includes(action)){
     const bytes=crypto.getRandomValues(new Uint8Array(16));
     args={...args,request_id:[...bytes].map(b=>b.toString(16).padStart(2,'0')).join('')};
   }
