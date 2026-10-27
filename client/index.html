@@ -51,12 +51,17 @@
     <div id="error-panel" class="notice error-notice" role="alert" hidden><span id="error-text"></span><button id="dismiss-error" class="text-button" aria-label="Dismiss error">Dismiss</button></div>
 
     <footer id="workspace-footer" class="workspace-footer" hidden>
-      <section id="result-panel" class="result-panel" aria-labelledby="results-heading" hidden><div class="results-heading"><span id="results-heading" class="eyebrow">WORKSPACE FILES</span><button id="refresh-files" class="text-button">Refresh</button></div><div id="result-files" class="result-files"></div></section>
+      <details id="result-panel" class="result-panel" hidden><summary class="results-heading"><span id="results-heading" class="eyebrow">Workspace files</span> <span id="result-count" class="result-count"></span></summary><div class="results-toolbar"><button id="refresh-files" class="text-button">Refresh</button></div><div id="result-files" class="result-files"></div></details>
       <form id="message-form" class="composer">
         <div id="pending-attachments" class="pending-attachments" aria-label="Pending attachments" hidden></div>
         <label class="visually-hidden" for="message-input">Message Darcy</label>
-        <textarea id="message-input" placeholder="Message Darcy…" rows="1" maxlength="32768" spellcheck="true"></textarea>
-        <div class="composer-actions"><div class="composer-left"><button id="attach-button" type="button" class="icon-button attach-button" aria-label="Attach a file" title="Attach a file, up to 16 MiB"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 13 6-6a3 3 0 0 1 4 4l-8 8a5 5 0 0 1-7-7l8-8m-3 9 6-6"/></svg></button><span id="composer-hint">Files stay in this workspace.</span></div><button id="stop-button" type="button" class="stop-button" hidden><span aria-hidden="true">■</span> Stop</button><button id="send-button" type="submit" class="send-button" aria-label="Send message" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button></div>
+        <div class="composer-row">
+          <button id="attach-button" type="button" class="icon-button attach-button" aria-label="Attach a file" title="Attach a file, up to 16 MiB"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 13 6-6a3 3 0 0 1 4 4l-8 8a5 5 0 0 1-7-7l8-8m-3 9 6-6"/></svg></button>
+          <textarea id="message-input" placeholder="Message Darcy…" rows="1" maxlength="32768" spellcheck="true"></textarea>
+          <button id="stop-button" type="button" class="stop-button" hidden><span aria-hidden="true">■</span> Stop</button>
+          <button id="send-button" type="submit" class="send-button" aria-label="Send message" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button>
+        </div>
+        <p id="composer-hint" class="composer-hint" hidden></p>
       </form>
       <div class="footer-line"><span id="workspace-status" role="status">Ready</span><button id="details-button" class="text-button">Connection details</button></div>
     </footer>

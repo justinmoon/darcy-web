@@ -7,7 +7,7 @@
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://atc.tinfoil.sh https://darcy-web.sear.containers.tinfoil.dev; img-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; worker-src 'none';">
   <title>Darcy — your private workspace</title>
-  <link rel="stylesheet" href="./style.1ef10ffe5a4348fa368c1a13.css" integrity="sha384-cPiCPSXy+G7jtmlH+5H7shhmjBWwngKHK9YVqqMKooh29cezZC/XqezYhWnW1VUQ" crossorigin="anonymous">
+  <link rel="stylesheet" href="./style.0538ad0bb632cb50528c0f1d.css" integrity="sha384-zOVYYNLBPLzNv/lqPO2daSEV2bHnOfRa6vb63n0GZKRbSe8lGZpbGK8SVvZzILOj" crossorigin="anonymous">
 </head>
 <body>
   <div class="app-shell">
@@ -51,12 +51,17 @@
     <div id="error-panel" class="notice error-notice" role="alert" hidden><span id="error-text"></span><button id="dismiss-error" class="text-button" aria-label="Dismiss error">Dismiss</button></div>
 
     <footer id="workspace-footer" class="workspace-footer" hidden>
-      <section id="result-panel" class="result-panel" aria-labelledby="results-heading" hidden><div class="results-heading"><span id="results-heading" class="eyebrow">WORKSPACE FILES</span><button id="refresh-files" class="text-button">Refresh</button></div><div id="result-files" class="result-files"></div></section>
+      <details id="result-panel" class="result-panel" hidden><summary class="results-heading"><span id="results-heading" class="eyebrow">Workspace files</span> <span id="result-count" class="result-count"></span></summary><div class="results-toolbar"><button id="refresh-files" class="text-button">Refresh</button></div><div id="result-files" class="result-files"></div></details>
       <form id="message-form" class="composer">
         <div id="pending-attachments" class="pending-attachments" aria-label="Pending attachments" hidden></div>
         <label class="visually-hidden" for="message-input">Message Darcy</label>
-        <textarea id="message-input" placeholder="Message Darcy…" rows="1" maxlength="32768" spellcheck="true"></textarea>
-        <div class="composer-actions"><div class="composer-left"><button id="attach-button" type="button" class="icon-button attach-button" aria-label="Attach a file" title="Attach a file, up to 16 MiB"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 13 6-6a3 3 0 0 1 4 4l-8 8a5 5 0 0 1-7-7l8-8m-3 9 6-6"/></svg></button><span id="composer-hint">Files stay in this workspace.</span></div><button id="stop-button" type="button" class="stop-button" hidden><span aria-hidden="true">■</span> Stop</button><button id="send-button" type="submit" class="send-button" aria-label="Send message" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button></div>
+        <div class="composer-row">
+          <button id="attach-button" type="button" class="icon-button attach-button" aria-label="Attach a file" title="Attach a file, up to 16 MiB"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 13 6-6a3 3 0 0 1 4 4l-8 8a5 5 0 0 1-7-7l8-8m-3 9 6-6"/></svg></button>
+          <textarea id="message-input" placeholder="Message Darcy…" rows="1" maxlength="32768" spellcheck="true"></textarea>
+          <button id="stop-button" type="button" class="stop-button" hidden><span aria-hidden="true">■</span> Stop</button>
+          <button id="send-button" type="submit" class="send-button" aria-label="Send message" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button>
+        </div>
+        <p id="composer-hint" class="composer-hint" hidden></p>
       </form>
       <div class="footer-line"><span id="workspace-status" role="status">Ready</span><button id="details-button" class="text-button">Connection details</button></div>
     </footer>
@@ -79,6 +84,6 @@
     </dialog>
     <input id="file-input" type="file" hidden>
   </div>
-  <script type="module" src="./app.81237fdf29af4dc8922be7df.js" integrity="sha384-wOcQ5Q7QYXzyFYkFSlgokivWHJJ2NFMey1nujQ4gbx/Uhnrftw83e5rQIICESKhA" crossorigin="anonymous"></script>
+  <script type="module" src="./app.2b2037bf5b1aa3e46a7fc644.js" integrity="sha384-cHxtbyA5Ih6GQDqS1MvZLqIyhk1h332dyHDQc9ZJQ7XLnm8LQouuwmFCcuSgMFlV" crossorigin="anonymous"></script>
 </body>
 </html>

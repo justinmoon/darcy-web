@@ -42,6 +42,7 @@ function syncComposer(){
   $('attach-button').disabled=!ready()||busy()||model.sending||model.transferring;
   $('stop-button').hidden=!busy();$('send-button').hidden=busy();
   $('stop-button').disabled=!model.connected;
+  $('composer-hint').hidden=!model.transferring&&!model.development&&model.snapshot?.storage!=='temporary';
   $('composer-hint').textContent=model.transferring?'Copying selected file…':model.development?'Local development · not verified':model.snapshot?.storage==='temporary'?'Temporary test workspace · erased when its TEE restarts.':'Files stay in this workspace.';
 }
 function renderPending(){
@@ -94,7 +95,7 @@ function formatSize(bytes){if(bytes<1024)return`${bytes} B`;if(bytes<1024*1024)r
 function renderFiles(){
   const files=(model.snapshot?.files||[]).filter(f=>f.kind!=='attachment'&&typeof f.path==='string').slice(0,100);
   const signature=JSON.stringify(files);if(signature===fileSignature)return;fileSignature=signature;
-  $('result-panel').hidden=!files.length;const list=$('result-files');list.replaceChildren();
+  $('result-count').textContent=String(files.length);$('result-panel').hidden=!files.length;const list=$('result-files');list.replaceChildren();
   const epoch=connectionEpoch;for(const file of files){const button=document.createElement('button');button.type='button';button.className='result-file';button.title=`Save ${file.name||file.path}`;
     const description=document.createElement('span'),name=document.createElement('span'),size=document.createElement('span');name.className='file-name';name.textContent=file.name||file.path;size.className='file-size';size.textContent=`${formatSize(Number(file.size)||0)} · Save`;description.append(name,size);button.append(description);button.insertAdjacentHTML('beforeend',icons.download);button.addEventListener('click',()=>{if(epoch===connectionEpoch)download(file,button);});list.append(button);}
 }
