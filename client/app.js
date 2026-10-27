@@ -51,7 +51,13 @@ function renderPending(){
 function renderBody(container,text){
   // Treat all model output as data. No HTML, external images, scripts, or embeds.
   container.replaceChildren();const blocks=String(text||'').split(/```[^\n]*\n([\s\S]*?)```/g);
-  blocks.forEach((block,index)=>{if(!block)return;const node=document.createElement(index%2?'pre':'p');if(index%2){const code=document.createElement('code');code.textContent=block;node.append(code);}else node.textContent=block;container.append(node);});
+  blocks.forEach((block,index)=>{if(!block)return;const node=document.createElement(index%2?'pre':'p');if(index%2){const code=document.createElement('code');code.textContent=block;node.append(code);}else{
+    for(const part of block.split(/(\*\*[^*]+\*\*|`[^`\n]+`)/g)){
+      if(part.startsWith('**')&&part.endsWith('**')){const strong=document.createElement('strong');strong.textContent=part.slice(2,-2);node.append(strong);}
+      else if(part.startsWith('`')&&part.endsWith('`')){const code=document.createElement('code');code.textContent=part.slice(1,-1);node.append(code);}
+      else node.append(document.createTextNode(part));
+    }
+  }container.append(node);});
 }
 function nearBottom(){return window.scrollY+window.innerHeight>=document.documentElement.scrollHeight-180;}
 function renderMessages(){
