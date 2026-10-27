@@ -2,77 +2,38 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {IDBFactory} from 'fake-indexeddb';
 import {credentialStore,clearLegacyLogin,loginController,BACKGROUND_LOCK_MS} from './login.js';
-const token='a'.repeat(64),policy={enclaveURL:'https://workspace.example',configRepo:'owner/config'};
-const options={...policy,token},record={ciphertext:'encrypted-only'};
-const verified={verification:true,snapshot:{verified:true,busy:false}};
-const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return{promise,resolve};};
-function fixture({db=new IDBFactory(),store=credentialStore(db),vault={validate:()=>{},create:async()=>record,seal:async()=>record,open:async()=>token},connect=async()=>verified,notify=()=>{}}={}){
+const token='a'.repeat(64),ownerHash='c'.repeat(64),policy={enclaveURL:'https://workspace.example',configRepo:'owner/config',passkeyOwnerSha256:ownerHash};
+const verified={verification:true,snapshot:{verified:true,busy:false}},deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return{promise,resolve};};
+function fixture({db=new IDBFactory(),store=credentialStore(db),vault={create:async()=>({ownerHash}),unlock:async()=>({token,ownerHash})},connect=async()=>verified,notify=()=>{},configured=true}={}){
   const events=[],timers=new Map();let clock=0,id=0,visible=true,phase;
-  const c=loginController({store,vault,connect:async args=>{events.push(['connect',args]);return connect(args);},disconnect:()=>events.push(['disconnect']),policy,onConnecting:()=>events.push(['connecting']),onConnected:r=>events.push(['connected',r]),onDisconnected:()=>events.push(['disconnected']),onPhase:p=>{phase=p;},onError:e=>events.push(['error',e.message]),notify,visible:()=>visible,now:()=>clock,later:(f,ms)=>{timers.set(++id,{f,ms});return id;},cancel:i=>timers.delete(i)});
-  return{c,store,db,events,timers,get phase(){return phase;},hide(){visible=false;c.suspend();},async show(){visible=true;await c.resume();},elapse:ms=>{clock+=ms;},async setup(){await c.init();await c.prepare(options);await c.advance();await c.advance();},async tick(){const [i,t]=timers.entries().next().value;timers.delete(i);await t.f();await new Promise(r=>setImmediate(r));}};
+  const c=loginController({store,vault,connect:async args=>{events.push(['connect',args]);return connect(args);},disconnect:()=>events.push(['disconnect']),policy:configured?policy:{...policy,passkeyOwnerSha256:null},onConnecting:()=>events.push(['connecting']),onConnected:r=>events.push(['connected',r]),onDisconnected:()=>events.push(['disconnected']),onPhase:p=>{phase=p;},onError:e=>events.push(['error',e.message]),notify,visible:()=>visible,now:()=>clock,later:(f,ms)=>{timers.set(++id,{f,ms});return id;},cancel:i=>timers.delete(i)});
+  return{c,store,db,events,timers,get phase(){return phase;},hide(){visible=false;c.suspend();},async show(){visible=true;await c.resume();},elapse:ms=>{clock+=ms;},async setup(){await c.init();await c.advance();},async tick(){const [i,t]=timers.entries().next().value;timers.delete(i);await t.f();await new Promise(r=>setImmediate(r));}};
 }
-test('one-time setup verifies owner before wrapping, confirms decrypt, persists ciphertext only',async()=>{
-  const f=fixture();await f.setup();assert.equal(f.phase,'connected');assert.equal((await f.store.read()).record.ciphertext,'encrypted-only');assert(!JSON.stringify(await f.store.read()).includes(token));assert.equal(f.events.filter(e=>e[0]==='connect').length,2);
+test('new owner creates passkey and confirms without an old credential or private request',async()=>{
+  const f=fixture({configured:false});await f.c.init();assert.equal(f.phase,'create');await f.c.advance();assert.equal(f.phase,'confirm');await f.c.advance();assert.equal(f.phase,'enrolled');assert.equal(f.c.enrollment(),ownerHash);assert.deepEqual((await f.store.read()).record,{ownerHash});assert(!JSON.stringify(await f.store.read()).includes(token));assert(!f.events.some(e=>e[0]==='connect'));
 });
-test('fresh app remains locked with no automatic credential prompt/network request',async()=>{
-  const f=fixture();await f.setup();const reload=fixture({db:f.db});await reload.c.init();await reload.c.resume();assert.equal(reload.phase,'unlock');assert.equal(reload.events.length,0);await reload.c.advance();assert.equal(reload.phase,'connected');
+test('fresh device unlocks provisioned workspace without stored metadata or key import',async()=>{
+  const f=fixture();await f.c.init();assert.equal(f.phase,'unlock');assert.equal(f.events.length,0);await f.c.advance();assert.equal(f.phase,'connected');assert.equal(f.events.find(e=>e[0]==='connect')[1].token,token);assert.equal((await f.store.read()).record,null);
 });
-test('brief app switch restores fresh verified state without another passkey or disk write',async()=>{
-  let prompts=0;const f=fixture({vault:{validate:()=>{},create:async()=>record,open:async()=>{prompts++;return token;}}});await f.setup();const before=await f.store.read();f.hide();f.elapse(1000);await f.show();assert.equal(f.phase,'connected');assert.equal(prompts,1);assert.deepEqual(await f.store.read(),before);assert.equal(f.timers.size,0);
+test('wrong passkey never sends a credential to the workspace',async()=>{
+  const f=fixture({vault:{unlock:async()=>({token,ownerHash:'d'.repeat(64)})}});await f.setup();assert.equal(f.phase,'unlock');assert(!f.events.some(e=>e[0]==='connect'));
 });
-test('15 minutes in background requires passkey again even if timers were frozen',async()=>{
-  const f=fixture();await f.setup();f.hide();f.elapse(BACKGROUND_LOCK_MS);await f.show();assert.equal(f.phase,'unlock');const before=f.events.length;await f.c.resume();assert.equal(f.events.length,before);await f.c.advance();assert.equal(f.phase,'connected');
+test('brief app switch reconnects state without a new passkey prompt or disk write',async()=>{
+  let prompts=0;const f=fixture({vault:{unlock:async()=>{prompts++;return{token,ownerHash};}}});await f.setup();const before=await f.store.read();f.hide();f.elapse(1000);await f.show();assert.equal(f.phase,'connected');assert.equal(prompts,1);assert.deepEqual(await f.store.read(),before);assert.equal(f.timers.size,0);
 });
-test('background timer clears memory without waiting for foreground',async()=>{
-  const f=fixture();await f.setup();f.hide();await f.tick();await f.show();assert.equal(f.phase,'unlock');
-});
-test('network loss retries connect only, never a mutation and never writes credentials',async()=>{
-  const f=fixture();await f.setup();const saved=await f.store.read();f.c.lost(new Error('Check history before retrying.'));await f.tick();assert.equal(f.phase,'connected');assert.deepEqual(await f.store.read(),saved);assert(f.events.some(e=>e[0]==='error'&&e[1].includes('Check history')));
-});
-test('lock in another window invalidates a frozen window; resume cannot re-save or reconnect',async()=>{
-  const a=fixture();await a.setup();const b=fixture({db:a.db});await b.c.init();await b.c.advance();b.hide();await a.c.lock();const before=b.events.length;await b.show();assert.equal(b.phase,'unlock');assert.equal(b.events.filter(e=>e[0]==='connect').length,1);assert.equal((await a.store.read()).revision,2);assert(b.events.length>=before);
-});
-test('forget leaves a revision tombstone and cannot be undone by another window',async()=>{
-  const a=fixture();await a.setup();const b=fixture({db:a.db});await b.c.init();await b.c.advance();b.hide();await a.c.forget();await b.show();assert.equal((await a.store.read()).record,null);assert.equal(b.phase,'import');
-});
-test('atomic compare-and-set rejects stale setup after lock/forget in another store instance',async()=>{
-  const db=new IDBFactory(),a=credentialStore(db),b=credentialStore(db);const initial=await a.read();await b.lock();await assert.rejects(a.replace(record,initial.revision),/another window/);assert.equal((await a.read()).record,null);
-});
-test('late passkey result cannot reopen or persist after lock',async()=>{
-  const pending=deferred(),f=fixture({vault:{validate:()=>{},create:()=>pending.promise,open:async()=>token}});await f.c.init();await f.c.prepare(options);const creating=f.c.advance();await f.c.lock();pending.resolve(record);await creating;assert.equal((await f.store.read()).record,null);assert(!f.events.some(e=>e[0]==='connected'));
-});
-test('late network result after lock cannot open private UI',async()=>{
-  const pending=deferred();let calls=0;const f=fixture({connect:()=>++calls===1?verified:pending.promise});await f.c.init();await f.c.prepare(options);await f.c.advance();const confirming=f.c.advance();await new Promise(r=>setTimeout(r,10));await f.c.lock();pending.resolve(verified);await confirming;assert(!f.events.some(e=>e[0]==='connected'));
-});
-test('wrong key/failed attestation never creates a passkey record',async()=>{
-  const f=fixture({connect:async()=>{throw Error('Denied or wrong release');}});await f.c.init();await f.c.prepare(options);assert.equal(f.phase,'import');assert.equal((await f.store.read()).record,null);
-});
-test('cancelling passkey leaves encrypted record intact and allows retry',async()=>{
-  const f=fixture();await f.setup();await f.c.lock();const saved=await f.store.read();let first=true;const g=fixture({db:f.db,vault:{validate:()=>{},open:async()=>{if(first){first=false;throw new DOMException('cancel','NotAllowedError');}return token;}}});await g.c.init();await g.c.advance();assert.equal(g.phase,'unlock');assert.deepEqual(await f.store.read(),saved);await g.c.advance();assert.equal(g.phase,'connected');
-});
-test('unsupported provider never persists raw key or grants a session',async()=>{
-  const f=fixture({vault:{validate:()=>{},create:async()=>{throw Error('PRF unavailable');}}});await f.c.init();await f.c.prepare(options);await f.c.advance();assert.equal(f.phase,'create');assert.equal((await f.store.read()).record,null);assert(!f.events.some(e=>e[0]==='connected'));
-});
-test('registration without output adds a separate user-triggered secure step',async()=>{
-  const f=fixture({vault:{validate:()=>{},create:async()=>({credentialId:'id'}),seal:async()=>record,open:async()=>token}});await f.c.init();await f.c.prepare(options);await f.c.advance();assert.equal(f.phase,'secure');await f.c.advance();assert.equal(f.phase,'confirm');await f.c.advance();assert.equal(f.phase,'connected');
-});
-test('unstable PRF confirmation cannot overwrite an existing saved key',async()=>{
-  const f=fixture({vault:{validate:()=>{},create:async()=>record,open:async()=> 'b'.repeat(64)}});await f.c.init();await f.c.prepare(options);await f.c.advance();await f.c.advance();assert.equal((await f.store.read()).record,null);assert(!f.events.some(e=>e[0]==='connected'));
-});
-test('legacy raw login database gets deleted, without importing its secret',async()=>{
-  const db=new IDBFactory();await new Promise(resolve=>{const r=db.open('darcy-device-login',1);r.onupgradeneeded=()=>r.result.createObjectStore('credentials');r.onsuccess=()=>{const tx=r.result.transaction('credentials','readwrite');tx.objectStore('credentials').put({token},'workspace');tx.oncomplete=()=>{r.result.close();resolve();};};});await clearLegacyLogin(db);assert(!(await db.databases()).some(d=>d.name==='darcy-device-login'));
-});
-test('unfinished setup expires after 15 minutes, including when background timers were frozen',async()=>{
-  const f=fixture();await f.c.init();await f.c.prepare(options);assert.equal(f.phase,'create');f.hide();f.elapse(BACKGROUND_LOCK_MS);await f.show();assert.equal(f.phase,'import');await f.c.advance();assert.equal((await f.store.read()).record,null);
-});
-test('late passkey ceremony after background deadline cannot save or unlock',async()=>{
-  const pending=deferred(),f=fixture({vault:{validate:()=>{},create:()=>pending.promise,open:async()=>token}});await f.c.init();await f.c.prepare(options);const creating=f.c.advance();f.hide();f.elapse(BACKGROUND_LOCK_MS);pending.resolve(record);await creating;await f.c.init();assert.equal(f.phase,'import');assert.equal((await f.store.read()).record,null);
-});
-test('lock broadcasts after durable commit, closing a concurrent old-revision unlock',async()=>{
-  const db=new IDBFactory(),base=credentialStore(db),gate=deferred();let b,notifications=0;
-  const a=fixture({db,store:{...base,lock:async()=>{await gate.promise;return base.lock();}},notify:()=>{notifications++;b?.c.externalLock();}});await a.setup();b=fixture({db});await b.c.init();
-  const locking=a.c.lock();await b.c.init();await b.c.advance();assert.equal(b.phase,'connected');gate.resolve();await locking;await b.c.init();assert.equal(notifications,2);assert.equal(b.phase,'unlock');assert.equal(b.events.at(-1)[0],'disconnected');
-});
-test('briefly hidden system passkey sheet does not leave an expiry timer on foreground setup',async()=>{
-  const pending=deferred(),f=fixture({vault:{validate:()=>{},create:()=>pending.promise,open:async()=>token}});await f.c.init();await f.c.prepare(options);const creating=f.c.advance();f.hide();await f.show();pending.resolve(record);await creating;assert.equal(f.phase,'confirm');assert.equal(f.timers.size,0);await f.c.advance();assert.equal(f.phase,'connected');assert.equal(f.timers.size,0);
-});
+test('15 minute background deadline enforced even with frozen timers',async()=>{const f=fixture();await f.setup();f.hide();f.elapse(BACKGROUND_LOCK_MS);await f.show();assert.equal(f.phase,'unlock');const n=f.events.length;await f.c.resume();assert.equal(f.events.length,n);await f.c.advance();assert.equal(f.phase,'connected');});
+test('background timer clears memory',async()=>{const f=fixture();await f.setup();f.hide();await f.tick();await f.show();assert.equal(f.phase,'unlock');});
+test('network loss retries connect only and never persists a credential',async()=>{const f=fixture();await f.setup();const saved=await f.store.read();f.c.lost(new Error('Check history before retrying.'));await f.tick();assert.equal(f.phase,'connected');assert.deepEqual(await f.store.read(),saved);});
+test('lock invalidates a frozen window through atomic revision',async()=>{const a=fixture();await a.setup();const b=fixture({db:a.db});await b.setup();b.hide();await a.c.lock();await b.show();assert.equal(b.phase,'unlock');assert.equal(b.events.filter(e=>e[0]==='connect').length,1);});
+test('atomic CAS prevents stale enrollment after another window locks',async()=>{const db=new IDBFactory(),a=credentialStore(db),b=credentialStore(db);await b.lock();await assert.rejects(a.replace({ownerHash},0),/another window/);});
+test('late passkey result cannot connect after lock',async()=>{const p=deferred(),f=fixture({vault:{unlock:()=>p.promise}});await f.c.init();const opening=f.c.advance();await f.c.lock();p.resolve({token,ownerHash});await opening;assert(!f.events.some(e=>e[0]==='connect'));});
+test('late attestation result cannot open private UI after lock',async()=>{const p=deferred(),f=fixture({connect:()=>p.promise});await f.c.init();const opening=f.c.advance();await new Promise(r=>setTimeout(r,10));await f.c.lock();p.resolve(verified);await opening;assert(!f.events.some(e=>e[0]==='connected'));});
+test('failed attestation leaves workspace locked',async()=>{const f=fixture({connect:async()=>{throw Error('Wrong release');}});await f.setup();assert.equal(f.phase,'unlock');assert(!f.events.some(e=>e[0]==='connected'));});
+test('cancelled unlock leaves no raw credential or automatic prompt',async()=>{const f=fixture({vault:{unlock:async()=>{throw new DOMException('cancel','NotAllowedError');}}});await f.setup();assert.equal(f.phase,'unlock');assert.equal((await f.store.read()).record,null);assert.equal(f.timers.size,0);});
+test('unsupported provider fails closed with no key-file fallback',async()=>{const f=fixture({configured:false,vault:{create:async()=>{throw Error('PRF unavailable');}}});await f.c.init();await f.c.advance();assert.equal(f.phase,'create');assert.equal((await f.store.read()).record,null);});
+test('registration without output uses explicit evaluation then confirmation',async()=>{const f=fixture({configured:false,vault:{create:async()=>({ownerHash:null}),unlock:async()=>({token,ownerHash})}});await f.c.init();await f.c.advance();assert.equal(f.phase,'secure');await f.c.advance();assert.equal(f.phase,'confirm');await f.c.advance();assert.equal(f.phase,'enrolled');});
+test('unstable PRF never completes enrollment',async()=>{const f=fixture({configured:false,vault:{create:async()=>({ownerHash}),unlock:async()=>({token,ownerHash:'d'.repeat(64)})}});await f.c.init();await f.c.advance();await f.c.advance();assert.equal(f.phase,'confirm');assert.equal((await f.store.read()).record,null);});
+test('pending enrollment expires on background deadline',async()=>{const f=fixture({configured:false});await f.c.init();await f.c.advance();f.hide();f.elapse(BACKGROUND_LOCK_MS);await f.show();assert.equal(f.phase,'create');assert.equal((await f.store.read()).record,null);});
+test('late system ceremony after deadline cannot complete enrollment',async()=>{const p=deferred(),f=fixture({configured:false,vault:{create:()=>p.promise}});await f.c.init();const creating=f.c.advance();f.hide();f.elapse(BACKGROUND_LOCK_MS);p.resolve({ownerHash});await creating;await f.c.init();assert.equal(f.phase,'create');});
+test('post-commit notification closes concurrent old-revision unlock',async()=>{const db=new IDBFactory(),base=credentialStore(db),gate=deferred();let b,n=0;const a=fixture({db,store:{...base,lock:async()=>{await gate.promise;return base.lock();}},notify:()=>{n++;b?.c.externalLock();}});await a.setup();b=fixture({db});await b.c.init();const locking=a.c.lock();await b.c.init();await b.c.advance();assert.equal(b.phase,'connected');gate.resolve();await locking;await b.c.init();assert.equal(n,2);assert.equal(b.phase,'unlock');assert.equal(b.events.at(-1)[0],'disconnected');});
+test('old raw and wrapped-login databases get deleted, never imported',async()=>{const db=new IDBFactory();for(const name of ['darcy-device-login','darcy-passkey'])await new Promise(resolve=>{const r=db.open(name,1);r.onsuccess=()=>{r.result.close();resolve();};});await clearLegacyLogin(db);assert(!(await db.databases()).some(d=>['darcy-device-login','darcy-passkey'].includes(d.name)));});

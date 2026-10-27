@@ -24,22 +24,10 @@
         <div class="eyebrow"><span class="mini-mark" aria-hidden="true">✳</span> A PRIVATE WORKSPACE</div>
         <h1 id="setup-title">A little room<br>to think. And do.</h1>
         <p class="setup-intro">One conversation. Your files and memory.<br>An agent running in a confidential workspace.</p>
-        <form id="connect-form" class="connect-form">
-          <label for="enclave-url">Workspace address</label>
-          <input id="enclave-url" name="enclaveURL" type="url" autocomplete="off" spellcheck="false" placeholder="https://your-workspace.tinfoil.sh" required>
-          <label for="config-repo">Expected configuration repository</label>
-          <input id="config-repo" name="configRepo" type="text" autocomplete="off" spellcheck="false" placeholder="owner/workspace-config" required>
-          <input id="owner-token" name="token" type="hidden">
-          <p class="field-note">Import your recovery key once on this device to set up a passkey. Only an encrypted copy stays on this device.</p>
-          <button id="key-file-button" type="button" class="primary-button">Import recovery-key file</button>
-          <input id="key-file-input" type="file" accept=".key,.txt" hidden>
-          <label id="dev-option" class="dev-option" hidden><input id="allow-local-dev" type="checkbox"> Allow unverified localhost development</label>
-          <button id="connect-submit" type="submit" class="primary-button" hidden><span>Continue</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></button>
-        </form>
-        <div id="passkey-panel" class="connect-form" hidden>
+        <div id="passkey-panel" class="connect-form">
           <p id="passkey-note" class="field-note">Loading…</p>
           <button id="passkey-action" type="button" class="primary-button" disabled>Loading…</button>
-          <button id="recover-button" type="button" class="text-button" hidden>Use recovery key instead</button>
+          <details id="enrollment-details" hidden><summary>Setup details</summary><p>Public registration fingerprint</p><code id="enrollment-hash"></code></details>
         </div>
         <p class="setup-footer">The browser checks the workspace’s attestation before sending private content.</p>
       </section>
