@@ -10,21 +10,29 @@ trusted: changed HTML could replace both JavaScript and its integrity value.
 GitHub Pages shares the account's origin across project sites; a dedicated domain
 would give the app its own browser origin.
 
-Create a passkey in your chosen provider, then confirm it. No password,
-recovery-key file, or per-device import exists. WebAuthn PRF and HKDF derive the
-workspace credential directly. Synced discoverable passkeys work on fresh
-browsers without transferring a saved browser record. Each unlock verifies the
-pinned enclave before sending its derived credential.
+This is one private workspace with invite-gated, self-service passkey setup.
+Enter the shared invite code, create a passkey in your chosen provider, then
+confirm it. The enclave initializes fresh encrypted storage and opens the chat.
+No operator hash binding, account password, recovery-key file or browser-key
+transfer is required. Later login needs only the passkey.
 
-Initial provisioning requires the owner to create the passkey, then the operator
-binds its public registration hash into the measured workspace configuration.
-There is no unauthenticated first-claim endpoint. The previous credential is
-retired; passkey enrollment is pending until that human step completes.
+WebAuthn PRF and HKDF derive the workspace capability. Each connection verifies
+the pinned enclave before sending an encrypted request. Only the invite hash
+enters measured config; the invite is 128 random bits, never shipped in this
+client. An invite holder cannot replace an existing workspace owner. Browser
+storage contains only a registered flag and lock revision, not credentials.
 
-Brief app switches retain the credential in memory; 15 minutes in the background
-or a fresh launch requires passkey unlock. Lock clears current windows sharing
-this browser storage and leaves server tasks running. Only public enrollment
-metadata is stored. No plaintext key or wrapped old key persists. Losing the
-passkey may lose the workspace; choose a provider with suitable backup/recovery.
-Browser code can read the derived credential while unlocked. Actual iPhone and
-provider interaction needs a device check beyond the automated tests.
+Brief app switches keep an unlocked session; 15 minutes in the background or a
+new launch needs passkey unlock. A fresh browser can choose Use existing passkey.
+Lock clears current windows sharing this browser storage; server tasks continue.
+Choose a passkey provider with suitable backup: losing the passkey can lose the
+workspace. Served code, browser and provider remain trusted; the hosting account
+shares its origin across Pages projects.
+
+Tests cover real Chrome virtual WebAuthn PRF, Rust HTTP/auth, invitation failures,
+reload/unlock, fresh storage, ownership checks, reset/re-enrollment, dropped
+replies and attestation rejection. Separate live acceptance passed real browser
+verification, encrypted TEE signup and full enclave restart, without model calls.
+Native iPhone/provider interaction remains a device check. Initialization is for
+an explicitly fresh disposable volume; this prototype is not a multitenant
+billing service or an externally audited production service.
