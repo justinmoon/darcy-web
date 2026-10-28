@@ -6,7 +6,7 @@ export function credentialStore(indexedDB){
     let abandoned=false;const open=indexedDB.open('darcy-login-v3',1);
     open.onupgradeneeded=()=>open.result.createObjectStore('vault');
     open.onerror=()=>reject(new Error('Device storage is unavailable.'));
-    open.onblocked=()=>{abandoned=true;reject(new Error('Close other Darcy windows and try again.'));};
+    open.onblocked=()=>{abandoned=true;reject(new Error('Close other Rapture windows and try again.'));};
     open.onsuccess=()=>{
       const db=open.result;if(abandoned){db.close();return;}db.onversionchange=()=>db.close();
       const tx=db.transaction('vault',write?'readwrite':'readonly'),s=tx.objectStore('vault');let result,problem;
@@ -24,7 +24,7 @@ export function credentialStore(indexedDB){
 export async function clearLegacyLogin(indexedDB){
   if(!indexedDB)return;
   for(const name of ['darcy-device-login','darcy-passkey','darcy-passkey-session'])await new Promise((resolve,reject)=>{
-    const request=indexedDB.deleteDatabase(name);request.onsuccess=()=>resolve();request.onerror=request.onblocked=()=>reject(new Error('Close old Darcy windows to remove obsolete login data.'));
+    const request=indexedDB.deleteDatabase(name);request.onsuccess=()=>resolve();request.onerror=request.onblocked=()=>reject(new Error('Close old Rapture windows to remove obsolete login data.'));
   });
 }
 export const BACKGROUND_LOCK_MS=15*60*1000;

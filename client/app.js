@@ -3,7 +3,7 @@ import {credentialStore,clearLegacyLogin,loginController} from './login.js';
 import {passkeys} from './passkeys.js';
 
 if(window.top!==window.self){
-  document.body.replaceChildren(document.createTextNode('Open Darcy directly in its own tab.'));
+  document.body.replaceChildren(document.createTextNode('Open Rapture directly in its own tab.'));
   throw new Error('Embedded sessions are disabled.');
 }
 
@@ -78,7 +78,7 @@ function renderMessages(){
     if(message.role==='assistant'&&index===messages.length-1&&busy())article.classList.add('pending');
     const label=document.createElement('div');label.className='message-label';
     if(message.role==='assistant'){const mark=document.createElement('span');mark.className='agent-mark';mark.textContent='✳';mark.setAttribute('aria-hidden','true');label.append(mark);}
-    label.append(document.createTextNode(message.role==='user'?'You':'Darcy'));
+    label.append(document.createTextNode(message.role==='user'?'You':'Rapture'));
     const body=document.createElement('div');body.className='message-body';renderBody(body,message.text);
     article.append(label,body);
     const tools=Array.isArray(message.tools)?message.tools:[];
@@ -100,7 +100,7 @@ function renderFiles(){
   const signature=JSON.stringify(files);if(signature===fileSignature)return;fileSignature=signature;
   $('result-count').textContent=String(files.length);$('result-panel').hidden=!files.length;const list=$('result-files');list.replaceChildren();
   const epoch=connectionEpoch;for(const file of files){const button=document.createElement('button');button.type='button';button.className='result-file';button.title=`Save ${file.name||file.path}`;
-    const description=document.createElement('span'),name=document.createElement('span'),size=document.createElement('span');name.className='file-name';name.textContent=file.name||file.path;size.className='file-size';size.textContent=`${formatSize(Number(file.size)||0)} · Save`;description.append(name,size);button.append(description);button.insertAdjacentHTML('beforeend',icons.download);button.addEventListener('click',()=>{if(epoch===connectionEpoch)download(file,button);});list.append(button);}
+    const description=document.createElement('span'),name=document.createElement('span'),size=document.createElement('span');name.className='file-name';name.textContent=file.name||file.path;size.className='file-size';size.textContent=`${formatSize(Number(file.size)||0)} · ${String(file.name||file.path).endsWith('.rapture.json')?'Publish':'Save'}`;description.append(name,size);button.append(description);button.insertAdjacentHTML('beforeend',icons.download);button.addEventListener('click',()=>{if(epoch===connectionEpoch)(String(file.name||file.path).endsWith('.rapture.json')?publishApp(file,button):download(file,button));});list.append(button);}
 }
 function render(){
   $('setup-panel').hidden=model.connected;$('conversation-panel').hidden=!model.connected;$('workspace-footer').hidden=!model.connected;
@@ -115,8 +115,8 @@ function render(){
 function renderPhone(){
   $('phone-panel').hidden=!model.connected||model.snapshot?.phone?.enabled!==true;
   const paired=!!phoneState?.phone_npub;
-  $('phone-status').textContent=phoneBusy?'Updating phone settings…':phoneState?.localError||phoneState?.error||(phoneState?.pairing_uncertain?'Invitation unfinished. Disconnect the phone and try again.':paired?'Phone invited. Accept Darcy’s invitation in WhiteNoise.':phoneState?.ready?'No phone paired.':'Phone connection is starting. Refresh in a moment.');
-  $('phone-agent-key').textContent=phoneState?.account_npub?`Darcy identity: ${phoneState.account_npub}`:'';
+  $('phone-status').textContent=phoneBusy?'Updating phone settings…':phoneState?.localError||phoneState?.error||(phoneState?.pairing_uncertain?'Invitation unfinished. Disconnect the phone and try again.':paired?'Phone invited. Accept Rapture’s invitation in WhiteNoise.':phoneState?.ready?'No phone paired.':'Phone connection is starting. Refresh in a moment.');
+  $('phone-agent-key').textContent=phoneState?.account_npub?`Rapture identity: ${phoneState.account_npub}`:'';
   $('phone-pair').hidden=paired;$('phone-revoke').hidden=!paired&&!phoneState?.pairing_uncertain;
   $('phone-pair').disabled=phoneBusy||!phoneState?.ready;
   $('phone-revoke').disabled=phoneBusy||!Number.isSafeInteger(phoneState?.revision);
@@ -183,7 +183,7 @@ function renderLogin(){
   const labels={loading:'Loading…',create:'Create passkey',secure:'Continue',confirm:'Confirm passkey',unlock:'Unlock',working:'Check your password manager',connecting:'Connecting…'};
   $('passkey-action').textContent=labels[loginPhase]||'Unlock';
   $('passkey-action').disabled=waiting;
-  $('setup-title').textContent=loginPhase==='invite'||loginPhase==='create'?'Set up Darcy':'Unlock Darcy';
+  $('setup-title').textContent=loginPhase==='invite'||loginPhase==='create'?'Set up Rapture':'Unlock Rapture';
   $('passkey-note').textContent=loginPhase==='invite'?'Invite only.':loginPhase==='confirm'?'Confirm your passkey once.':loginPhase==='working'?'Approve the passkey prompt.':loginPhase==='connecting'?'Opening your encrypted workspace.':loginPhase==='checking'?'Checking invite…':'';
   $('existing-passkey').hidden=waiting;
   $('existing-passkey').textContent=loginPhase==='unlock'?'Set up workspace':'Use existing passkey';
@@ -230,6 +230,18 @@ $('file-input').addEventListener('change',async()=>{
     const files=await request('files',{});if(epoch!==connectionEpoch)return;accept(files,epoch);
   }catch(e){operationError(e,epoch);}finally{if(epoch===connectionEpoch){model.transferring=false;render();}}
 });
+async function publishApp(file,button){
+  if(!model.connected)return;const epoch=connectionEpoch;
+  const publishingURL=new URL('https://app.rapture.gg/publishing/#receive');const portal=window.open(publishingURL.href,'rapture-publishing');if(!portal){operationError(new Error('Allow this app to open the publishing window.'),epoch);return;}
+  button.disabled=true;let transfer=null;
+  const receive=event=>{if(event.source===portal&&event.origin===publishingURL.origin&&event.data?.type==='rapture-publish-ready'&&transfer)portal.postMessage({type:'rapture-publish-artifact',artifact:transfer},publishingURL.origin);};
+  window.addEventListener('message',receive);const cleanup=()=>{window.removeEventListener('message',receive);transfer=null;};setTimeout(cleanup,300000);
+  try{const response=await request('export_file',{path:file.path});if(epoch!==connectionEpoch)return;
+    const data=response?.data_base64??response?.data?.data_base64;if(typeof data!=='string'||data.length>16*1024*1024)throw new Error('App bundle exceeds limit.');
+    const bytes=Uint8Array.from(atob(data),c=>c.charCodeAt(0));transfer=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));
+    portal.postMessage({type:'rapture-publish-artifact',artifact:transfer},publishingURL.origin);
+  }catch(e){cleanup();operationError(e,epoch);}finally{if(epoch===connectionEpoch)button.disabled=false;}
+}
 async function download(file,button){
   if(!model.connected)return;const epoch=connectionEpoch;clearError();button.disabled=true;
   try{
