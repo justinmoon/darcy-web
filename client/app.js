@@ -1,4 +1,4 @@
-import {connect,request,subscribe,disconnect,defaultConnection} from './transport.js';
+import {connect,enroll,checkInvite,request,subscribe,disconnect,defaultConnection} from './transport.js';
 import {credentialStore,clearLegacyLogin,loginController} from './login.js';
 import {passkeys} from './passkeys.js';
 
@@ -22,7 +22,7 @@ function clearSession(preserveDraft=false){
   Object.assign(model,{connected:false,verification:false,development:false,connecting:false,sending:false,transferring:false,snapshot:null,pending:[],viewingHistory:false,config:null});
   loadingHistory=false;filePickerEpoch=null;phoneState=null;phoneBusy=false;messageSignature='';fileSignature='';openTools.clear();
   $('phone-npub').value='';$('phone-agent-key').textContent='';
-  $('message-input').value=draft;$('file-input').value='';
+  $('message-input').value=draft;$('invite-code').value='';$('file-input').value='';
   $('older-button').disabled=false;$('latest-button').disabled=false;
   return connectionEpoch;
 }
@@ -170,31 +170,43 @@ function accept(value,epoch=connectionEpoch){
 }
 const channel=typeof BroadcastChannel==='function'?new BroadcastChannel('darcy-passkey-lock'):null;
 const vault=passkeys({credentials:navigator.credentials,crypto:window.crypto,policy:defaultConnection,origin:location.origin,scope:new URL('.',location.href).pathname});
-let loginPhase='loading';
+let loginPhase='loading',uncertainMutation=false;
+let loginSlowTimer=null;
 function renderLogin(){
   $('passkey-panel').hidden=model.connected;
-  const labels={loading:'Loading…',create:'Create passkey',secure:'Continue',confirm:'Confirm passkey',enrolled:'Passkey ready',unlock:'Unlock',working:'Waiting for passkey…',connecting:'Verifying workspace…'};
+  const waiting=['loading','working','connecting','checking'].includes(loginPhase);
+  $('passkey-panel').setAttribute('aria-busy',String(waiting));
+  $('login-spinner').hidden=!waiting;
+  $('invite-form').hidden=!['invite','checking'].includes(loginPhase);
+  $('passkey-action').hidden=['invite','checking'].includes(loginPhase);
+  $('invite-submit').disabled=loginPhase==='checking';
+  const labels={loading:'Loading…',create:'Create passkey',secure:'Continue',confirm:'Confirm passkey',unlock:'Unlock',working:'Check your password manager',connecting:'Connecting…'};
   $('passkey-action').textContent=labels[loginPhase]||'Unlock';
-  $('passkey-action').disabled=['loading','working','connecting','connected','enrolled'].includes(loginPhase);
-  $('passkey-note').textContent=loginPhase==='create'?'Choose where to save your passkey. No password or key file needed.':loginPhase==='secure'?'Continue with your new passkey.':loginPhase==='confirm'?'Confirm your new passkey once to check it works.':loginPhase==='enrolled'?'Your passkey is ready. Finishing workspace setup.':loginPhase==='unlock'?'Use your passkey to open your workspace.':'Your password manager handles your passkey.';
-  $('enrollment-details').hidden=loginPhase!=='enrolled';
-  $('enrollment-hash').textContent=loginPhase==='enrolled'?login.enrollment():'';
+  $('passkey-action').disabled=waiting;
+  $('setup-title').textContent=loginPhase==='invite'||loginPhase==='create'?'Set up Darcy':'Unlock Darcy';
+  $('passkey-note').textContent=loginPhase==='invite'?'Invite only.':loginPhase==='confirm'?'Confirm your passkey once.':loginPhase==='working'?'Approve the passkey prompt.':loginPhase==='connecting'?'Opening your encrypted workspace.':loginPhase==='checking'?'Checking invite…':'';
+  $('existing-passkey').hidden=waiting;
+  $('existing-passkey').textContent=loginPhase==='unlock'?'Set up workspace':'Use existing passkey';
+  if(loginSlowTimer)clearTimeout(loginSlowTimer);
+  if(loginPhase==='connecting')loginSlowTimer=setTimeout(()=>{if(loginPhase==='connecting')$('passkey-note').textContent='First setup can take a minute. Still connecting…';},10000);
 }
 const login=loginController({
-  store:credentialStore(window.indexedDB),vault,connect,disconnect,policy:defaultConnection,
+  store:credentialStore(window.indexedDB),vault,connect,enroll,checkInvite,disconnect,policy:defaultConnection,
   visible:()=>document.visibilityState!=='hidden',notify:()=>channel?.postMessage('lock'),
   onConnecting(){const epoch=clearSession(true);unsubscribe=subscribe(value=>accept(value,epoch));model.connecting=true;render();},
   onConnected(response,options){
     model.connected=true;model.connecting=false;model.verification=true;model.development=false;
-    model.config={enclaveURL:options.enclaveURL,configRepo:options.configRepo};accept(response.snapshot);render();
+    model.config={enclaveURL:options.enclaveURL,configRepo:options.configRepo};if(!uncertainMutation)clearError();accept(response.snapshot);render();
     void navigator.storage?.persist?.().catch(()=>{});
   },
-  onPhase(value){loginPhase=value;model.connecting=['working','connecting'].includes(value);renderLogin();render();},
+  onPhase(value){loginPhase=value;model.connecting=['working','connecting','checking'].includes(value);renderLogin();render();},
   onDisconnected(){clearSession(true);render();},
-  onError:cause=>error(cause.message||cause.error||'Connection interrupted. Check history before retrying a task.'),
+  onError:cause=>{if(['send','import_file','stop','phone_pair','phone_revoke'].includes(cause.uncertainAction))uncertainMutation=true;error(cause.message||cause.error||'Connection interrupted. Check history before retrying a task.');},
 });
 if(channel)channel.onmessage=event=>{if(event.data==='lock')login.externalLock();};
 $('passkey-action').addEventListener('click',()=>{clearError();void login.advance();});
+$('invite-form').addEventListener('submit',event=>{event.preventDefault();const code=$('invite-code').value.trim();$('invite-code').value='';clearError();void login.admit(code);});
+$('existing-passkey').addEventListener('click',()=>{clearError();if(loginPhase==='unlock')login.startSetup();else login.useExisting();});
 $('message-input').addEventListener('input',()=>{const input=$('message-input');input.style.height='auto';input.style.height=`${Math.min(input.scrollHeight,220)}px`;syncComposer();});
 $('message-input').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();if(!$('send-button').disabled)$('message-form').requestSubmit();}});
 $('message-form').addEventListener('submit',async event=>{
@@ -240,10 +252,11 @@ $('older-button').addEventListener('click',()=>historyPage(true));
 $('latest-button').addEventListener('click',()=>historyPage(false));
 for(const id of ['connection-button','details-button'])$(id).addEventListener('click',()=>{$('connection-dialog').showModal();void loadPhone();});
 $('disconnect-button').addEventListener('click',()=>{clearError();$('message-input').value='';void login.lock();$('connection-dialog').close();});
-$('dismiss-error').addEventListener('click',clearError);
-window.addEventListener('pagehide',()=>login.suspend());
+$('dismiss-error').addEventListener('click',()=>{uncertainMutation=false;clearError();});
+function suspendLogin(){$('invite-code').value='';login.suspend();}
+window.addEventListener('pagehide',suspendLogin);
 window.addEventListener('pageshow',()=>void login.resume());
 window.addEventListener('online',()=>void login.resume());
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')login.suspend();else void login.resume();});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')suspendLogin();else void login.resume();});
 render();
-void clearLegacyLogin(window.indexedDB).then(()=>login.init()).catch(cause=>{error(cause.message);loginPhase='create';renderLogin();});
+void clearLegacyLogin(window.indexedDB).then(()=>login.init()).catch(cause=>{error(cause.message);loginPhase='invite';renderLogin();});

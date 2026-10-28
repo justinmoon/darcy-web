@@ -20,12 +20,13 @@ class PinnedClient extends SecureClient{
   }
 }
 
-function loseConnection(error,active=session){
-  if(active!==session){const failure=new Error('An earlier connection ended.');failure.reconnectRequired=false;return failure;}
+function loseConnection(error,active=session,action){
+  if(active!==session){const failure=new Error(action==='check_invite'?'Could not verify invite. Try again.':'An earlier connection ended.');failure.reconnectRequired=false;return failure;}
   disconnect();
   const failure=new Error('Connection lost. Reconnect and check recent history before retrying a task.');
   failure.reconnectRequired=true;
-  emit({event:'error',error:failure.message,reconnectRequired:true});
+  failure.uncertainAction=action;
+  emit({event:'error',error:failure.message,reconnectRequired:true,uncertainAction:action});
   return failure;
 }
 
@@ -49,12 +50,12 @@ async function exchange(active,action,args={}){
   let response;
   try{
     response=await active.fetch('/api',{method:'POST',headers:{'Content-Type':'application/json'},body,redirect:'error',signal:AbortSignal.timeout(90000)});
-  }catch(error){throw loseConnection(error,active);}
+  }catch(error){throw loseConnection(error,active,action);}
   let value;
   try{
     const text=await boundedText(response);
     value=JSON.parse(text);
-  }catch(error){throw loseConnection(error,active);}
+  }catch(error){throw loseConnection(error,active,action);}
   if(!response.ok){
     const error=new Error(value.error||`Workspace request failed (${response.status}).`);
     if(response.status===401||response.status===403){
@@ -79,7 +80,16 @@ function schedule(active){
   },lastSnapshot?.busy?600:2500);
 }
 
-export async function connect(options){
+export async function checkInvite(inviteCode){
+  const url=new URL(deployment.enclaveURL);
+  const client=new PinnedClient({enclaveURL:url.origin,configRepo:deployment.configRepo,baseURL:url.origin+'/'});
+  await client.ready();
+  const active={token:'',fetch:(path,init)=>client.fetch(path,init)};
+  return exchange(active,'check_invite',{inviteCode});
+}
+export const enroll=(options,inviteCode)=>connect(options,{inviteCode});
+
+export async function connect(options,initial={}){
   disconnect();const started=generation;
   const url=new URL(options.enclaveURL);
   if(url.username||url.password||url.search||url.hash||url.pathname!=='/')throw new Error('Use only the enclave origin, without a path or credentials.');
@@ -99,7 +109,8 @@ export async function connect(options){
   if(started!==generation)throw new Error('Connection was cancelled.');
   session=active;
   try{
-    const snapshot=await exchange(active,'state');
+    const enrollment=initial.inviteCode?{inviteCode:initial.inviteCode,request_id:[...crypto.getRandomValues(new Uint8Array(16))].map(b=>b.toString(16).padStart(2,'0')).join('')}:{};
+    const snapshot=await exchange(active,initial.inviteCode?'enroll':'state',enrollment);
     if(session!==active)throw new Error('Connection was cancelled.');
     lastSnapshot=snapshot;schedule(active);
     return{verification,mode:verification?'tee':'dev',snapshot};
